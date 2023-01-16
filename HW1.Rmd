@@ -1,0 +1,84 @@
+---
+title: "MSiA_420_HW1"
+output: pdf_document
+date: "2023-01-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(boot)
+```
+
+## Question 1
+
+See attached
+
+## Question 2
+
+### a
+
+```{r}
+dat <- read_csv("HW1_data.csv")
+dat <- dat %>%
+  select(y,x)
+m1 <- lm(y~x, data = dat)
+summary(m1)
+```
+
+As seen above, the coefficients $\hat{\beta_0}$ and $\hat{\beta_1}$ are 5.4207 and 0.4896, respectively. Thus, the initial guesses of the form $\hat{\gamma_0} = \frac{1}{\hat{\beta_0}} = \frac{1}{5.4207} = 0.1845$, and $\hat{\gamma_1} = \frac{\hat{\beta_1}}{\hat{\beta_0}} = \frac{0.48964}{5.4207} = 0.0903$ 
+
+### b
+
+```{r}
+###R commands for fitting learning curve example using the general optimizer nlm()
+est <- c(0.1845, 0.0903)
+x_i <- dat$x
+y_i <- dat$y
+fn <- function(p) {
+    yhat <- (p[1] * x_i) / (p[2] + x_i)
+    sum((y_i-yhat)^2)
+} 
+out_nlm <- nlm(fn, p = est,hessian=TRUE)
+out_nls <- nls(y~((p1 * x) / (p2 + x)), data = dat, start = list(p1 = 0.1845, p2 = 0.0903), trace = TRUE)
+theta_nlm <- out_nlm$estimate  #parameter estimates
+theta_nlm
+out_nls
+```
+
+## Question 3
+
+### a
+
+```{r}
+mse <- out_nlm$minimum / (length(y_i) - length(theta_nlm))
+info_mat <- out_nlm$hessian / 2 / mse
+cov_theta <- solve(info_mat)
+se <- sqrt(diag(cov_theta))
+info_mat
+cov_theta
+se
+```
+
+### b
+
+```{r}
+vcov(out_nls)
+```
+
+Although not exactly the same, the covariance matrices are very similar.
+
+## Question 4
+
+### a
+
+```{r}
+dat_boot <- boot(dat, )
+
+MLCboot<-boot(MLC, MLCfit, R=5000, theta0=c(1,-.05,-.14,-.55), x_pred=c(1,15))
+MLCboot
+VarYhat<-var(MLCboot$t); VarYhat
+SEYhat<-sqrt(VarYhat); SEYhat
+plot(MLCboot)  
+boot.ci(MLCboot,conf=c(.9,.95,.99),type=c("norm","basic"))
+```
