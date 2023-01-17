@@ -68,17 +68,69 @@ vcov(out_nls)
 
 Although not exactly the same, the covariance matrices are very similar.
 
+### c
+
+```{r}
+p1_left <- theta_nlm[1] - 1.96 * se[1]
+p1_right <- theta_nlm[1] + 1.96 * se[1]
+p2_left <- theta_nlm[2] - 1.96 * se[2]
+p2_right <- theta_nlm[2] + 1.96 * se[2]
+p1_left
+p1_right
+p2_left
+p2_right
+```
+
+```{r}
+confint.default(out_nls)
+```
+
+As seen from the above comparison, the "crude" confidence interval is similar to the output by R, but it is wider.
+
 ## Question 4
 
 ### a
 
 ```{r}
-dat_boot <- boot(dat, )
-
-MLCboot<-boot(MLC, MLCfit, R=5000, theta0=c(1,-.05,-.14,-.55), x_pred=c(1,15))
-MLCboot
-VarYhat<-var(MLCboot$t); VarYhat
-SEYhat<-sqrt(VarYhat); SEYhat
-plot(MLCboot)  
-boot.ci(MLCboot,conf=c(.9,.95,.99),type=c("norm","basic"))
+dat_fit <- function(Z, i, theta0){
+  Zboot <- Z[i, ]
+  x <- Zboot[[2]]
+  y <- Zboot[[1]]
+  fn <- function(p){
+    yhat <- (p[1] * x) / (p[2] + x)
+    sum((y - yhat)^2)
+  }
+  out <- nlm(fn, p = theta0)
+  theta <- out$estimate
+}
+dat_boot <- boot(dat, dat_fit, R = 20000, theta0 = c(0.1845, 0.0903))
+dat_boot
+plot(dat_boot, index = 1)
+title(main = "Histogram of t0")
+plot(dat_boot, index = 2)
+title(main = "Histogram of t1")
 ```
+
+### b
+
+```{r}
+# gamma 0
+boot.ci(dat_boot, conf = 0.95, type = "norm", index = 1)
+
+#gamma 1
+boot.ci(dat_boot, conf = 0.95, type = "norm", index = 2)
+```
+
+### c
+
+```{r}
+# gamma 0
+boot.ci(dat_boot, conf = 0.95, type = "basic", index = 1)
+
+#gamma 1
+boot.ci(dat_boot, conf = 0.95, type = "basic", index = 2)
+```
+
+### d
+
+For the most part, the confidence intervals in part b and part c agree. The confidence interval for $\gamma_1$ is much closer since the histogram is pretty much completely normal. This means in part b where we use normal approximation, the confidence intervals will be much closer. For $\gamma_0$, we can see from part a that the histogram is slightly left skewed. Thus, the reflected confidence interval is slightly shifted to the right compared to the "crude" confidence interval. Note that the histogram for $\gamma_0$ is still very close to normal despite skewedness, and thus the confidence intervals do not differ by much.
