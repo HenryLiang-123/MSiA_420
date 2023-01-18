@@ -18,7 +18,8 @@ See attached
 
 ### a
 
-```{r}
+```{r q2a, echo=FALSE}
+########### QUESTION 2 begins here ################### 
 dat <- read_csv("HW1_data.csv")
 dat <- dat %>%
   select(y,x)
@@ -30,8 +31,7 @@ As seen above, the coefficients $\hat{\beta_0}$ and $\hat{\beta_1}$ are 5.4207 a
 
 ### b
 
-```{r}
-###R commands for fitting learning curve example using the general optimizer nlm()
+```{r q2b, echo=FALSE}
 est <- c(0.1845, 0.0903)
 x_i <- dat$x
 y_i <- dat$y
@@ -40,9 +40,9 @@ fn <- function(p) {
     sum((y_i-yhat)^2)
 } 
 out_nlm <- nlm(fn, p = est,hessian=TRUE)
-out_nls <- nls(y~((p1 * x) / (p2 + x)), data = dat, start = list(p1 = 0.1845, p2 = 0.0903), trace = TRUE)
 theta_nlm <- out_nlm$estimate  #parameter estimates
 theta_nlm
+out_nls <- nls(y~((p1 * x) / (p2 + x)), data = dat, start = list(p1 = 0.1845, p2 = 0.0903))
 out_nls
 ```
 
@@ -50,7 +50,8 @@ out_nls
 
 ### a
 
-```{r}
+```{r q3a, echo=FALSE}
+########### QUESTION 3 begins here ################### 
 mse <- out_nlm$minimum / (length(y_i) - length(theta_nlm))
 info_mat <- out_nlm$hessian / 2 / mse
 cov_theta <- solve(info_mat)
@@ -62,7 +63,7 @@ se
 
 ### b
 
-```{r}
+```{r q3b, echo=FALSE}
 vcov(out_nls)
 ```
 
@@ -70,7 +71,7 @@ Although not exactly the same, the covariance matrices are very similar.
 
 ### c
 
-```{r}
+```{r q3c, echo=FALSE}
 p1_left <- theta_nlm[1] - 1.96 * se[1]
 p1_right <- theta_nlm[1] + 1.96 * se[1]
 p2_left <- theta_nlm[2] - 1.96 * se[2]
@@ -81,7 +82,7 @@ p2_left
 p2_right
 ```
 
-```{r}
+```{r q3c confint, echo=FALSE}
 confint.default(out_nls)
 ```
 
@@ -91,7 +92,8 @@ As seen from the above comparison, the "crude" confidence interval is similar to
 
 ### a
 
-```{r}
+```{r q4a, echo=FALSE}
+########### QUESTION 4 begins here ################### 
 dat_fit <- function(Z, i, theta0){
   Zboot <- Z[i, ]
   x <- Zboot[[2]]
@@ -113,7 +115,7 @@ title(main = "Histogram of t1")
 
 ### b
 
-```{r}
+```{r q4b, echo=FALSE}
 # gamma 0
 boot.ci(dat_boot, conf = 0.95, type = "norm", index = 1)
 
@@ -123,7 +125,7 @@ boot.ci(dat_boot, conf = 0.95, type = "norm", index = 2)
 
 ### c
 
-```{r}
+```{r q4c, echo=FALSE}
 # gamma 0
 boot.ci(dat_boot, conf = 0.95, type = "basic", index = 1)
 
@@ -134,3 +136,15 @@ boot.ci(dat_boot, conf = 0.95, type = "basic", index = 2)
 ### d
 
 For the most part, the confidence intervals in part b and part c agree. The confidence interval for $\gamma_1$ is much closer since the histogram is pretty much completely normal. This means in part b where we use normal approximation, the confidence intervals will be much closer. For $\gamma_0$, we can see from part a that the histogram is slightly left skewed. Thus, the reflected confidence interval is slightly shifted to the right compared to the "crude" confidence interval. Note that the histogram for $\gamma_0$ is still very close to normal despite skewedness, and thus the confidence intervals do not differ by much.
+
+# Appendix
+
+This section is to be used for including your R code. The following lines of code will take care of it. Please make sure to comment your code appropriately - in particular, demarcating codes belonging to different questions. Among other things, it will be easier for you to debug your own code.
+
+```{r getlabels}
+labs = knitr::all_labels()
+labs = labs[!labs %in% c("setup","getlabels", "allcode")]
+```
+
+```{r allcode,ref.label=labs,eval=FALSE,echo=TRUE}
+```
