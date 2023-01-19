@@ -8,6 +8,8 @@ date: "2023-01-16"
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(boot)
+library(caret)
+library(projpred)
 ```
 
 ## Question 1
@@ -183,6 +185,49 @@ aic_nls
 The nls model is better since it has a lower AIC.
 
 ## Question 7
+
+```{r q7, echo=FALSE}
+Nrep <- 15 # set to 1 because we are only doing one pass
+K <- nrow(dat) # set to the number of observations in the dataset
+n.models = 2 #number of different models to fit and compare
+FitFun1 <- function(x, p) p[1]+p[2]*sqrt(x)
+FitFun2 <- function(x, p) (p[1] * x) / (p[2] + x)
+n <- nrow(dat)
+yhat <- matrix(0,n,n.models)
+MSE <- matrix(0,Nrep,n.models)
+for (j in 1:Nrep) {
+  cv_idx <- cvfolds(n, K)
+  for (k in cv_idx) {
+    out <- lm(y~sqrt(x), data=dat[-k,])
+    yhat[k,1] <- as.numeric(predict(out, dat[k,]))
+    out <- nls(y ~ FitFun2(x,p), data=dat[-k,], start=list(p=c(0.1845, 0.0903)))
+    yhat[k,2] <- as.numeric(predict(out, dat[k,]))
+  }
+  y <- dat$y
+  MSE[j,] <- apply(yhat,2,function(x) sum((y-x)^2))/(n-1)
+}
+
+MSE
+MSEAve <- apply(MSE,2,mean); MSEAve #averaged mean square CV error
+```
+
+As seen above, the better model is clearly model 2, which uses nls.
+
+## Question 8
+
+```{r q8, echo=FALSE}
+m8 <- lm(y~sqrt(x), data = dat)
+pred_m8 <- predict(m8, dat)
+res_m8 <- dat$y - pred_m8
+
+pred_nls <- predict(out_nls, dat)
+res_nls <- dat$y - pred_nls
+
+plot(dat$x, res_m8, main = "X vs Residuals for Linear Model")
+plot(dat$x, res_nls, main = "X vs Residuals for NLS")
+```
+
+As seen from the plots above, the X vs Residuals plot for the linear model shows non-randomly distributed residuals around the 0 line. There is a clear non-linear pattern, which means that the linear model is not a good fit for the data. On the contrary, the X vs Residuals plot for the non-linear least squares model shows randomly distributed residuals around 0, which suggests there is no further relationship that we missed. Thus, the nls model is a better choice, which is in keeping with results above.
 
 # Appendix
 
