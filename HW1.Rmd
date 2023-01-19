@@ -162,8 +162,27 @@ SEY<-sqrt(var(Yhatboot)+mse)
 c(Yhat0-qnorm(.975)*SEY, Yhat0+qnorm(.975)*SEY)
 
 # Predicted
-# Do i just use the model with parameters from confint.default(out_nls) and find left and right?
+boot.ci(dat_boot2, conf = 0.95,type=c("basic"))
 ```
+
+As seen above, the prediction interval for "future" Y is wider than the confidence interval. This is because of the added uncertainty from the standard errors of the prediction of the model. A prediction interval is a better representation because it not only takes into account the error of the estimated parameters, but also the error in the model that generates the prediction.
+
+## Question 6
+
+```{r q6, echo=FALSE}
+m6 <- lm(y~sqrt(x), data = dat)
+n <- nrow(dat)
+log_lik_m6 <- logLik(m6)
+aic_m6 <- -2 * log_lik_m6 / n + 2 * 2 / n
+log_lik_nls <- logLik(out_nls)
+aic_nls <- -2 * log_lik_nls / n + 2 * 2 / n
+aic_m6
+aic_nls
+```
+
+The nls model is better since it has a lower AIC.
+
+## Question 7
 
 # Appendix
 
