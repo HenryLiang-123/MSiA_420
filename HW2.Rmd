@@ -1,0 +1,45 @@
+---
+title: "HW2"
+output: pdf_document
+date: "2023-02-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(boot)
+library(caret)
+library(projpred)
+```
+
+## Question 1
+
+### a
+
+```{r q1a, echo=FALSE}
+########### QUESTION 1 begins here ################### 
+dat <- read_excel("HW2_data.xls")
+dat <- dat %>%
+  select(-`...1`)
+dat$cost <- log10(dat$cost)
+
+m1 <- lm(cost ~., data = dat)
+summary(m1)
+```
+
+As seen from the above model output, the R-squared is 0.5831, which means that out model is able to explain 58% of the variation in the data. The model seems to fit fairly well to the data, but some predictors are insignificant.
+
+### b
+
+As seen from the above model output, the number of complications that arose during heart disease treatment, the number of comorbidities, and the number of interventions or procedures carried out are the top 3 variables with the highest influence on cost as their coefficients are the largest.
+
+### c
+
+```{r q1c, echo=FALSE}
+par(mfrow = c(2,2))
+plot(m1)
+```
+
+```{r}
+
+```
