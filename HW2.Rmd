@@ -6,10 +6,13 @@ date: "2023-02-06"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
 library(tidyverse)
 library(boot)
 library(caret)
 library(projpred)
+library(car)
+library(nnet)
 ```
 
 ## Question 1
@@ -22,8 +25,14 @@ dat <- read_excel("HW2_data.xls")
 dat <- dat %>%
   select(-`...1`)
 dat$cost <- log10(dat$cost)
+scale_data <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
 
-m1 <- lm(cost ~., data = dat)
+dat_scaled <- as.data.frame(lapply(dat, scale_data))
+
+m1 <- lm(cost ~., data = dat_scaled)
+vif(m1)
 summary(m1)
 ```
 
@@ -31,15 +40,99 @@ As seen from the above model output, the R-squared is 0.5831, which means that o
 
 ### b
 
-As seen from the above model output, the number of complications that arose during heart disease treatment, the number of comorbidities, and the number of interventions or procedures carried out are the top 3 variables with the highest influence on cost as their coefficients are the largest.
+As seen from the above model output, the number of complications that arose during heart disease treatment, the number of comorbidities, and the number of interventions or procedures carried out are the top 3 variables with the highest influence on cost as their coefficients are the largest. Note the VIF output for each variable is close to 1, meaning little to no multicolinearity. Also note from the normal QQ plot below that our residuals are normally distributed. This makes our estimates of the regression coefficients reliable
 
 ### c
 
 ```{r q1c, echo=FALSE}
-par(mfrow = c(2,2))
+par(mfrow = c(2, 2))
 plot(m1)
 ```
 
-```{r}
+As seen from the diagnostic plots above, the residual vs fitted plot shows that the residuals have non-linear patterns, which means that the linear model does not explain the non-linear relationships that was in the data, which is expected. Looking at the scale-location plot, we can see that there is a clear trend, which means that we have are violating the assumption of equal variance of the residuals for every level of independent variables.
 
+## Question 2
+
+### a
+
+```{r q2a, echo=FALSE}
+########### QUESTION 2 begins here ################### 
+Nrep <- 3 #number of replicates of CV
+K <- 10  #K-fold CV on each replicate
+n.models <- 12 #number of different models to fit
+size <- c(5, 15, 25)
+decay <- c(0.001, 0.01, 0.1, 0)
+n <- nrow(dat)
+y <- dat$cost
+yhat <- matrix(0, n, n.models)
+MSE <- matrix(0, Nrep, n.models)
+output <- data.frame()
+for (s in size) {
+  for (d in decay) {
+    for (j in 1:Nrep) {
+      cv_idx <- createFolds(dat$cost, k = K)
+      for (k in 1:K) {
+        out <-
+          nnet(
+            cost ~ .,
+            data = dat[-cv_idx[[k]],],
+            linout = T,
+            skip = F,
+            size = s,
+            decay = d,
+            maxit = 1000,
+            trace = F
+          )
+         yhat[cv_idx[[k]]] <- as.numeric(predict(out, dat[cv_idx[[k]], ]))
+      } #end of k loop
+      MSE[j, ] <- apply(yhat, 2, function(x)
+        sum((y - x) ^ 2)) / n
+    }#end of j loop
+    MSEAve <- apply(MSE,2,mean)
+    output <- rbind(output, c(s, d, mean(MSEAve)))
+  }
+}
 ```
+
+```{r q2a_cont, echo=FALSE}
+names(output) <- c("size", "decay", "Average CV Error over 3 replicates")
+output
+```
+
+### b
+
+```{r q2b, echo=FALSE}
+nn1 <- nnet(cost ~ ., data = dat, linout=T, skip=F, size=5, decay=0.01, maxit=1000, trace=F)
+yhat <- as.numeric(predict(nn1))
+y <- dat$cost
+mse <- mean((y - yhat)^2)
+r2 <- 1 - mse/var(y); r2 
+```
+
+As seen above, with the size = 5 and decay = 0.01 from CV, the neural network is able to explain `r r2 * 100` % of the variance.
+
+### c
+
+```{r q2c, echo=FALSE}
+library(ALEPlot)
+yhat <- function(X.model, newdata) as.numeric(predict(X.model, newdata))
+nn1 <- nnet(cost ~ ., data = dat, linout=T, skip=F, size=5, decay=0.01, maxit=1000, trace=F)
+par(mfrow=c(2,4))
+for (j in 1:8) {
+  ALEPlot(data.frame(dat[, 2:9]), nn1, pred.fun=yhat, J=j, K=50, NA.plot = TRUE)
+  }
+ ## This creates main effect ALE plots for all 8 predictors
+```
+
+As seen from the ALE plots, ervis, comp, and comorb have the most significant effect on cost. They all have a positive relationship with cost.
+
+### d
+
+```{r q2d, echo=FALSE}
+pred <- predict(nn1, dat)
+res <- dat$cost - pred
+
+plot(dat$cost, res, main = "Fitted vs Residuals")
+```
+
+AS seen from the plot above, all non-linear relationships have been captured.
