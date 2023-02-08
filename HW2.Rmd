@@ -11,8 +11,10 @@ library(tidyverse)
 library(boot)
 library(caret)
 library(projpred)
+library(MASS)
 library(car)
 library(nnet)
+library(rpart)
 ```
 
 ## Question 1
@@ -57,16 +59,18 @@ As seen from the diagnostic plots above, the residual vs fitted plot shows that 
 
 ```{r q2a, echo=FALSE}
 ########### QUESTION 2 begins here ################### 
+set.seed(123)
 Nrep <- 3 #number of replicates of CV
 K <- 10  #K-fold CV on each replicate
 n.models <- 12 #number of different models to fit
-size <- c(5, 15, 25)
+size <- c(5, 10, 15)
 decay <- c(0.001, 0.01, 0.1, 0)
 n <- nrow(dat)
 y <- dat$cost
 yhat <- matrix(0, n, n.models)
 MSE <- matrix(0, Nrep, n.models)
 output <- data.frame()
+model_num <- 1
 for (s in size) {
   for (d in decay) {
     for (j in 1:Nrep) {
@@ -83,18 +87,20 @@ for (s in size) {
             maxit = 1000,
             trace = F
           )
-         yhat[cv_idx[[k]]] <- as.numeric(predict(out, dat[cv_idx[[k]], ]))
+         yhat[cv_idx[[k]], model_num] <- as.numeric(predict(out, dat[cv_idx[[k]], ]))
       } #end of k loop
       MSE[j, ] <- apply(yhat, 2, function(x)
         sum((y - x) ^ 2)) / n
     }#end of j loop
-    MSEAve <- apply(MSE,2,mean)
-    output <- rbind(output, c(s, d, mean(MSEAve)))
+    output <- rbind(output, c(s, d))
+    model_num <- model_num + 1
   }
 }
 ```
 
 ```{r q2a_cont, echo=FALSE}
+MSEAve <- apply(MSE,2,mean)
+output <- cbind(output, MSEAve)
 names(output) <- c("size", "decay", "Average CV Error over 3 replicates")
 output
 ```
@@ -102,21 +108,21 @@ output
 ### b
 
 ```{r q2b, echo=FALSE}
-nn1 <- nnet(cost ~ ., data = dat, linout=T, skip=F, size=5, decay=0.01, maxit=1000, trace=F)
+nn1 <- nnet(cost ~ ., data = dat, linout=T, skip=F, size=5, decay=0.1, maxit=1000, trace=F)
 yhat <- as.numeric(predict(nn1))
 y <- dat$cost
 mse <- mean((y - yhat)^2)
 r2 <- 1 - mse/var(y); r2 
 ```
 
-As seen above, with the size = 5 and decay = 0.01 from CV, the neural network is able to explain `r r2 * 100` % of the variance.
+As seen above, with the size = 5 and decay = 0.1 from CV, the neural network is able to explain `r r2 * 100` % of the variance.
 
 ### c
 
 ```{r q2c, echo=FALSE}
 library(ALEPlot)
 yhat <- function(X.model, newdata) as.numeric(predict(X.model, newdata))
-nn1 <- nnet(cost ~ ., data = dat, linout=T, skip=F, size=5, decay=0.01, maxit=1000, trace=F)
+nn1 <- nnet(cost ~ ., data = dat, linout=T, skip=F, size=5, decay=0.1, maxit=1000, trace=F)
 par(mfrow=c(2,4))
 for (j in 1:8) {
   ALEPlot(data.frame(dat[, 2:9]), nn1, pred.fun=yhat, J=j, K=50, NA.plot = TRUE)
@@ -124,7 +130,7 @@ for (j in 1:8) {
  ## This creates main effect ALE plots for all 8 predictors
 ```
 
-As seen from the ALE plots, ervis, comp, and comorb have the most significant effect on cost. They all have a positive relationship with cost.
+As seen from the ALE plots, ervis, comp, and comorb, and intvn have the most significant effect on cost. They all have a positive relationship with cost.
 
 ### d
 
@@ -136,3 +142,132 @@ plot(dat$cost, res, main = "Fitted vs Residuals")
 ```
 
 AS seen from the plot above, all non-linear relationships have been captured.
+
+## Question 3
+
+### a
+
+```{r q3a, echo=FALSE}
+########### QUESTION 3 begins here ################### 
+set.seed(123)
+Nrep <- 3 #number of replicates of CV
+K <- 10  #K-fold CV on each replicate
+n.models <- 4 #number of different models to fit
+cp <- c(5,15,25,30)
+n <- nrow(dat)
+y <- dat$cost
+yhat <- matrix(0, n, n.models)
+MSE <- matrix(0, Nrep, n.models)
+model_num <- 1
+for (com_p in cp) {
+    for (j in 1:Nrep) {
+      cv_idx <- createFolds(dat$cost, k = K)
+      for (k in 1:K) {
+        control <- rpart.control(minbucket = 5, maxdepth = com_p)
+        out <- rpart(cost ~ ., data = dat[-cv_idx[[k]],], method = "anova", control = control)
+        yhat[cv_idx[[k]], model_num] <- as.numeric(predict(out, dat[cv_idx[[k]], ]))
+      } #end of k loop
+      MSE[j, ] <- apply(yhat, 2, function(x)
+        sum((y - x) ^ 2)) / n
+    }#end of j loop
+    
+    model_num <- model_num + 1
+}
+MSEAve <- apply(MSE,2,mean)
+output <- cbind(cp, MSEAve)
+output
+```
+
+As seen above, the best depth is 5.
+
+### b
+
+```{r q3b, echo=FALSE}
+control <- rpart.control(minbucket = 5, maxdepth = 5)
+out <- rpart(cost ~ ., data = dat, method = "anova", control = control)
+plotcp(out)
+control_opti <- rpart.control(minbucket = 5, maxdepth = 6)
+out_opti <- rpart(cost ~ ., data = dat, method = "anova", control = control)
+par(cex=.9)
+plot(out_opti, uniform=F)
+text(out_opti, use.n = F)
+par(cex=1)
+out_opti$variable.importance
+yhat <- as.numeric(predict(out_opti))
+y <- dat$cost
+mse <- mean((y - yhat)^2)
+r2 <- 1 - mse/var(y); r2 
+```
+
+As seen from the above plots and R^2, the decision tree algorithm explains `r r2 * 100` % of the variation in the data. It is still very good, but not as good as the neural network.
+
+### c
+
+```{r q3c, echo=FALSE}
+pred <- predict(out_opti, dat)
+res <- dat$cost - pred
+plot(dat$cost, res, main = "Fitted vs Residuals")
+```
+
+### d
+
+As seen above, the neural network can explain the most amount of variance in this dataset, which means it has the least MSE. Thus, we choose neural network.
+
+## Question 4
+
+### a
+
+```{r q4a, echo=FALSE}
+########### QUESTION 4 begins here ################### 
+dat <- fgl
+set.seed(123)
+Nrep <- 3 #number of replicates of CV
+K <- 10  #K-fold CV on each replicate
+n.models <- 12 #number of different models to fit
+size <- c(5, 10, 15)
+decay <- c(0.001, 0.01, 0.1, 0)
+n <- nrow(dat)
+y <- dat$type
+yhat <- matrix(0, n, n.models)
+missclass <- matrix(0, Nrep, n.models)
+output <- data.frame()
+model_num <- 1
+for (s in size) {
+  for (d in decay) {
+    for (j in 1:Nrep) {
+      cv_idx <- createFolds(dat$type, k = K)
+      for (k in 1:K) {
+        out <-
+          nnet(
+            type ~ .,
+            data = dat[-cv_idx[[k]],],
+            linout = T,
+            skip = F,
+            size = s,
+            decay = d,
+            maxit = 1000,
+            trace = F
+          )
+        yhat[cv_idx[[k]], model_num] <- predict(out, dat[cv_idx[[k]], ], type="class")
+      } #end of k loop
+      missclass[j, ] <- apply(yhat, 2, function(x) sum(y != x) / length(y))
+    }#end of j loop
+    output <- rbind(output, c(s, d))
+    model_num <- model_num + 1
+  }
+}
+```
+
+```{r q4a_cont, echo=FALSE}
+missclass_avg <- apply(missclass,2,mean)
+output <- cbind(output, missclass_avg)
+names(output) <- c("size", "decay", "Average CV Missclassification rate over 3 replicates")
+output
+```
+
+```{r q4a_cont, echo=FALSE}
+nn_best <- nnet(type ~ ., data = dat, linout=T, skip=F, size=15, decay=0.01, maxit=1000, trace=F)
+pred <- predict(nn_best, type="class")
+sum(y != pred) / length(y)
+```
+
