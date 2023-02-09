@@ -7,7 +7,6 @@ date: "2023-02-06"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(readxl)
-library(tidyverse)
 library(boot)
 library(caret)
 library(projpred)
@@ -15,6 +14,7 @@ library(MASS)
 library(car)
 library(nnet)
 library(rpart)
+library(tidyverse)
 ```
 
 ## Question 1
@@ -24,14 +24,11 @@ library(rpart)
 ```{r q1a, echo=FALSE}
 ########### QUESTION 1 begins here ################### 
 dat <- read_excel("HW2_data.xls")
-dat <- dat %>%
-  select(-`...1`)
+dat <- dat[2:10]
 dat$cost <- log10(dat$cost)
-scale_data <- function(x) {
-  (x - min(x)) / (max(x) - min(x))
-}
 
-dat_scaled <- as.data.frame(lapply(dat, scale_data))
+dat_scaled <- as.data.frame(cbind(dat$cost, scale(dat[2:9])))
+names(dat_scaled) <- names(dat)
 
 m1 <- lm(cost ~., data = dat_scaled)
 vif(m1)
@@ -42,7 +39,7 @@ As seen from the above model output, the R-squared is 0.5831, which means that o
 
 ### b
 
-As seen from the above model output, the number of complications that arose during heart disease treatment, the number of comorbidities, and the number of interventions or procedures carried out are the top 3 variables with the highest influence on cost as their coefficients are the largest. Note the VIF output for each variable is close to 1, meaning little to no multicolinearity. Also note from the normal QQ plot below that our residuals are normally distributed. This makes our estimates of the regression coefficients reliable
+As seen from the above model output, dur, the number of comorbidities, and the number of interventions or procedures carried out are the top 3 variables with the highest influence on cost as their coefficients are the largest. Note the VIF output for each variable is close to 1, meaning little to no multicolinearity. Also note from the normal QQ plot below that our residuals are normally distributed. This makes our estimates of the regression coefficients reliable
 
 ### c
 
@@ -63,10 +60,10 @@ set.seed(123)
 Nrep <- 3 #number of replicates of CV
 K <- 10  #K-fold CV on each replicate
 n.models <- 12 #number of different models to fit
-size <- c(5, 10, 15)
+size <- c(1,2,3)
 decay <- c(0.001, 0.01, 0.1, 0)
-n <- nrow(dat)
-y <- dat$cost
+n <- nrow(dat_scaled)
+y <- dat_scaled$cost
 yhat <- matrix(0, n, n.models)
 MSE <- matrix(0, Nrep, n.models)
 output <- data.frame()
@@ -74,12 +71,12 @@ model_num <- 1
 for (s in size) {
   for (d in decay) {
     for (j in 1:Nrep) {
-      cv_idx <- createFolds(dat$cost, k = K)
+      cv_idx <- createFolds(dat_scaled$cost, k = K)
       for (k in 1:K) {
         out <-
           nnet(
             cost ~ .,
-            data = dat[-cv_idx[[k]],],
+            data = dat_scaled[-cv_idx[[k]],],
             linout = T,
             skip = F,
             size = s,
@@ -87,7 +84,7 @@ for (s in size) {
             maxit = 1000,
             trace = F
           )
-         yhat[cv_idx[[k]], model_num] <- as.numeric(predict(out, dat[cv_idx[[k]], ]))
+         yhat[cv_idx[[k]], model_num] <- as.numeric(predict(out, dat_scaled[cv_idx[[k]], ]))
       } #end of k loop
       MSE[j, ] <- apply(yhat, 2, function(x)
         sum((y - x) ^ 2)) / n
@@ -108,24 +105,25 @@ output
 ### b
 
 ```{r q2b, echo=FALSE}
-nn1 <- nnet(cost ~ ., data = dat, linout=T, skip=F, size=5, decay=0.1, maxit=1000, trace=F)
+set.seed(123)
+nn1 <- nnet(cost ~ ., data = dat_scaled, linout=T, skip=F, size=2, decay=0.001, maxit=1000, trace=F)
 yhat <- as.numeric(predict(nn1))
-y <- dat$cost
+y <- dat_scaled$cost
 mse <- mean((y - yhat)^2)
 r2 <- 1 - mse/var(y); r2 
 ```
 
-As seen above, with the size = 5 and decay = 0.1 from CV, the neural network is able to explain `r r2 * 100` % of the variance.
+As seen above, with the size = 2 and decay = 0.001 from CV, the neural network is able to explain `r r2 * 100` % of the variance.
 
 ### c
 
 ```{r q2c, echo=FALSE}
 library(ALEPlot)
 yhat <- function(X.model, newdata) as.numeric(predict(X.model, newdata))
-nn1 <- nnet(cost ~ ., data = dat, linout=T, skip=F, size=5, decay=0.1, maxit=1000, trace=F)
+nn1 <- nnet(cost ~ ., data = dat_scaled, linout=T, skip=F, size=2, decay=0.001, maxit=1000, trace=F)
 par(mfrow=c(2,4))
 for (j in 1:8) {
-  ALEPlot(data.frame(dat[, 2:9]), nn1, pred.fun=yhat, J=j, K=50, NA.plot = TRUE)
+  ALEPlot(data.frame(dat_scaled[, 2:9]), nn1, pred.fun=yhat, J=j, K=50, NA.plot = TRUE)
   }
  ## This creates main effect ALE plots for all 8 predictors
 ```
@@ -135,10 +133,9 @@ As seen from the ALE plots, ervis, comp, and comorb, and intvn have the most sig
 ### d
 
 ```{r q2d, echo=FALSE}
-pred <- predict(nn1, dat)
-res <- dat$cost - pred
-
-plot(dat$cost, res, main = "Fitted vs Residuals")
+pred <- predict(nn1, dat_scaled)
+res <- dat_scaled$cost - pred
+plot(pred, nn1$residuals, main = "Fitted vs Residuals")
 ```
 
 AS seen from the plot above, all non-linear relationships have been captured.
@@ -149,54 +146,42 @@ AS seen from the plot above, all non-linear relationships have been captured.
 
 ```{r q3a, echo=FALSE}
 ########### QUESTION 3 begins here ################### 
-set.seed(123)
+set.seed(55)
+control <- rpart.control(minbucket = 5, cp = 0.01)
+out <- rpart(cost ~ ., data = dat_scaled, method = "anova", control = control)
+plotcp(out)
+control_opti <- rpart.control(minbucket = 5, cp = 0.017)
+out_opti <- rpart(cost ~ ., data = dat_scaled, method = "anova", control = control)
 Nrep <- 3 #number of replicates of CV
 K <- 10  #K-fold CV on each replicate
-n.models <- 4 #number of different models to fit
-cp <- c(5,15,25,30)
-n <- nrow(dat)
-y <- dat$cost
+n.models <- 1 #number of different models to fit
+cp <- c(0.001,0.01,0.1,0)
+n <- nrow(dat_scaled)
+y <- dat_scaled$cost
 yhat <- matrix(0, n, n.models)
 MSE <- matrix(0, Nrep, n.models)
 model_num <- 1
-for (com_p in cp) {
-    for (j in 1:Nrep) {
-      cv_idx <- createFolds(dat$cost, k = K)
-      for (k in 1:K) {
-        control <- rpart.control(minbucket = 5, maxdepth = com_p)
-        out <- rpart(cost ~ ., data = dat[-cv_idx[[k]],], method = "anova", control = control)
-        yhat[cv_idx[[k]], model_num] <- as.numeric(predict(out, dat[cv_idx[[k]], ]))
-      } #end of k loop
-      MSE[j, ] <- apply(yhat, 2, function(x)
-        sum((y - x) ^ 2)) / n
-    }#end of j loop
+for (j in 1:Nrep) {
+  cv_idx <- createFolds(dat_scaled$cost, k = K)
+  for (k in 1:K) {
+    control_opti <- rpart.control(minbucket = 5, cp = 0.017)
+    out_opti <- rpart(cost ~ ., data = dat_scaled, method = "anova", control = control_opti)
+    yhat[cv_idx[[k]], model_num] <- as.numeric(predict(out_opti, dat_scaled[cv_idx[[k]], ]))
+  } #end of k loop
+  MSE[j, ] <- apply(yhat, 2, function(x)
+    sum((y - x) ^ 2)) / n
+}#end of j loop
     
-    model_num <- model_num + 1
-}
 MSEAve <- apply(MSE,2,mean)
-output <- cbind(cp, MSEAve)
-output
+MSEAve
 ```
 
-As seen above, the best depth is 5.
+As seen above, the best cp is 0.01.
 
 ### b
 
 ```{r q3b, echo=FALSE}
-control <- rpart.control(minbucket = 5, maxdepth = 5)
-out <- rpart(cost ~ ., data = dat, method = "anova", control = control)
-plotcp(out)
-control_opti <- rpart.control(minbucket = 5, maxdepth = 6)
-out_opti <- rpart(cost ~ ., data = dat, method = "anova", control = control)
-par(cex=.9)
-plot(out_opti, uniform=F)
-text(out_opti, use.n = F)
-par(cex=1)
-out_opti$variable.importance
-yhat <- as.numeric(predict(out_opti))
-y <- dat$cost
-mse <- mean((y - yhat)^2)
-r2 <- 1 - mse/var(y); r2 
+r2 <- 1 - MSEAve/var(y); r2 
 ```
 
 As seen from the above plots and R^2, the decision tree algorithm explains `r r2 * 100` % of the variation in the data. It is still very good, but not as good as the neural network.
@@ -204,9 +189,9 @@ As seen from the above plots and R^2, the decision tree algorithm explains `r r2
 ### c
 
 ```{r q3c, echo=FALSE}
-pred <- predict(out_opti, dat)
-res <- dat$cost - pred
-plot(dat$cost, res, main = "Fitted vs Residuals")
+pred <- predict(out_opti, dat_scaled)
+res <- dat_scaled$cost - pred
+plot(pred, res, main = "Fitted vs Residuals")
 ```
 
 ### d
@@ -223,8 +208,8 @@ dat <- fgl
 set.seed(123)
 Nrep <- 3 #number of replicates of CV
 K <- 10  #K-fold CV on each replicate
-n.models <- 12 #number of different models to fit
-size <- c(5, 10, 15)
+n.models <- 8 #number of different models to fit
+size <- c(5, 10)
 decay <- c(0.001, 0.01, 0.1, 0)
 n <- nrow(dat)
 y <- dat$type
@@ -241,7 +226,7 @@ for (s in size) {
           nnet(
             type ~ .,
             data = dat[-cv_idx[[k]],],
-            linout = T,
+            linout = F,
             skip = F,
             size = s,
             decay = d,
@@ -265,9 +250,87 @@ names(output) <- c("size", "decay", "Average CV Missclassification rate over 3 r
 output
 ```
 
-```{r q4a_cont, echo=FALSE}
-nn_best <- nnet(type ~ ., data = dat, linout=T, skip=F, size=15, decay=0.01, maxit=1000, trace=F)
-pred <- predict(nn_best, type="class")
-sum(y != pred) / length(y)
+### b
+
+```{r q4b, echo=FALSE}
+set.seed(123)
+dat <- fgl
+control <- rpart.control(minbucket = 5, maxdepth = 5)
+out <- rpart(type ~ ., data = dat, method = "class", control = control)
+plotcp(out)
+printcp(out) 
+#prune back to optimal size, according to plot of CV r^2
+out <- prune(out, cp=0.022)  #approximately the cp corresponding to the best size
+par(cex=.7); plot(out, uniform=F); text(out, use.n = F); par(cex=1)
+out$variable.importance
+out$cptable[nrow(out$cptable),]
+out$cptable[nrow(out$cptable),][c(3,4)]*min(table(dat$type)/nrow(dat))  #training and cv misclass rates
+yhat<-predict(out, type="class"); sum(yhat != dat$type)/nrow(dat) #check training misclass rate
 ```
 
+### c
+
+```{r q4c, echo=FALSE}
+m2 <- multinom(type ~., data= dat, trace=FALSE)
+yhat<-predict(m2, type="class")
+sum(yhat != dat$type)/nrow(dat)
+```
+
+### d
+
+```{r q4d, echo=FALSE}
+dat <- fgl
+set.seed(123)
+Nrep <- 3 #number of replicates of CV
+K <- 10 #K-fold CV on each replicate
+n.models <-3 #number of different models to fit
+size <- c(5, 10)
+decay <- c(0.001, 0.01, 0.1, 0)
+n <- nrow(dat)
+y <- as.numeric(as.factor(dat$type))
+yhat <- matrix(0, n, n.models)
+missclass <- matrix(0, Nrep, n.models)
+output <- data.frame()
+
+for (j in 1:Nrep) {
+  cv_idx <- createFolds(dat$type, k = K)
+  for (k in 1:K) {
+    out <-
+      nnet(
+        type ~ .,
+        data = dat[-cv_idx[[k]], ],
+        linout = F,
+        skip = F,
+        size = 10,
+        decay = 0.01,
+        maxit = 1000,
+        trace = F,
+        method = "class"
+      )
+    yhat[cv_idx[[k]], 1] <- as.numeric(factor(predict(out, dat[cv_idx[[k]], ], type="class"), levels = levels(dat$type)))
+    
+    control <- rpart.control(minbucket = 5, cp = 0.022)
+    out <- rpart(type ~ ., data = dat[-cv_idx[[k]], ], method = "class", control = control)
+    yhat[cv_idx[[k]], 2] <- predict(out, dat[cv_idx[[k]], ], type="class")
+    
+    out <- multinom(type ~., data = dat[-cv_idx[[k]], ], trace=FALSE)
+    yhat[cv_idx[[k]], 3] <- predict(out, dat[cv_idx[[k]], ], type="class")
+  } #end of k loop
+  missclass[j, ] <- apply(yhat, 2, function(x) sum(y != x) / length(y))
+}#end of j loop
+
+missclass_avg <- apply(missclass, 2, mean)
+missclass_avg
+```
+
+As seen above, the best model is neural network with the smallest missclassification error
+
+# Appendix
+
+```{r getlabels}
+labs = knitr::all_labels()
+labs = labs[!labs %in% c("setup","getlabels", "allcode")]
+```
+
+```{r allcode,ref.label=labs,eval=FALSE,echo=TRUE}
+```
