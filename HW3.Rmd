@@ -17,6 +17,7 @@ library(tidyverse)
 library(yaImpute)
 library(scatterplot3d)
 library(rgl)
+library(mgcv)
 ```
 
 ## Question 1
@@ -28,14 +29,20 @@ dat <- read_excel("HW2_data.xls") %>%
   select(-'...1')
 dat$cost <- log10(dat$cost)
 
+means <- sapply(dat[2:9], mean)
+sds <- sapply(dat[2:9], sd)
+
 Nrep <- 50 #number of replicates of CV
 K <-  nrow(dat) #n-fold CV on each replicate
 n.models <- 4 #number of different models to fit
 n <- nrow(dat)
-y <- dat$cost
 yhat = matrix(0, n, n.models) 
-MSE <- matrix(0, Nrep, n.models)
+MSE <- matrix(0, 1, n.models)
 cv_idx <- createFolds(dat$cost, k = K)
+dat[1:9]<-sapply(dat[1:9], function(x) (x-mean(x))/sd(x)) #standardize predictors
+y <- dat$cost
+
+
 for (k in 1:K) {
   train <- as.matrix(dat[-cv_idx[[k]],2:9])
   test <- as.matrix(dat[cv_idx[[k]],2:9])
@@ -63,9 +70,8 @@ for (k in 1:K) {
 MSE[1,]=apply(yhat,2,function(x) sum((y-x)^2))/n
 #end of j loop
 MSEAve<- apply(MSE,2,mean); MSEAve #averaged mean square CV error
-MSEsd <- apply(MSE,2,sd); MSEsd   #SD of mean square CV error
 r2<-1-MSEAve/var(y); r2  #CV r^2
-plot(yhat[,2],y)
+plot(yhat[,3],y)
 ```
 
 The best K was 9. The pros for using n-fold cross validation over k-fold cross validation is that we can test the model over a variety of datasets and that we do not need replicates. The disadvantage is that it is computationally expensive.
@@ -73,20 +79,21 @@ The best K was 9. The pros for using n-fold cross validation over k-fold cross v
 ### b
 
 ```{r q1b, echo=FALSE}
-MSEsd[3]
+sd(yhat[,3])
 ```
 
 ### c
 
 ```{r q1c, echo=FALSE}
 test <- as.matrix(data.frame(age = 59, gend = 0, intvn = 10, drugs = 0, ervis = 3, comp = 0, comorb = 4, dur = 300))
+test_std <- (test - means) / sds
 train <- as.matrix(dat[,2:9])
 ytrain <- dat[, 1]
 
-out<-ann(train,test,9,verbose=F)
+out<-ann(train,test_std,9,verbose=F)
 ind<-as.matrix(out$knnIndexDist[,1:9])
 yhat<-apply(ind,2,function(x) mean(ytrain$cost[x]))
-yhat
+yhat #log base 10
 ```
 
 ## Question 2
@@ -94,5 +101,68 @@ yhat
 ### a
 
 ```{r q2a, echo=FALSE}
+dat <- read_excel("HW2_data.xls") %>%
+  select(-'...1')
+dat$cost <- log10(dat$cost)
+
+means <- sapply(dat[2:9], mean)
+sds <- sapply(dat[2:9], sd)
+
+Nrep <- 1 #number of replicates of CV
+K <-  nrow(dat) #n-fold CV on each replicate
+n.models <- 1 #number of different models to fit
+n <- nrow(dat)
+yhat = matrix(0, n, n.models) 
+MSE <- matrix(0, 1, n.models)
+cv_idx <- createFolds(dat$cost, k = K)
+dat[1:9]<-sapply(dat[1:9], function(x) (x-mean(x))/sd(x)) #standardize predictors
+y <- dat$cost
+
+cv_idx <- createFolds(dat$cost, k = K)
+for (k in 1:K) {
+  train <- dat[-cv_idx[[k]], ]
+  test <- dat[cv_idx[[k]], ]
+  out <- gam(cost~s(age) + gend + s(intvn) + drugs + s(ervis) + comp + s(comorb) + s(dur) , data = train, family=gaussian(), sp=c(-1,-1,-1,-1,-1)) 
+  yhat[cv_idx[[k]],1]<-as.numeric(predict(out, test))
+} #end of k loop
+MSE[1,]=apply(yhat,2,function(x) sum((y-x)^2))/n
+#end of j loop
+MSEAve<- apply(MSE,2,mean); MSEAve #averaged mean square CV error
+r2<-1-MSEAve/var(y); r2  #CV r^2
+```
+
+```{r q2a_cont, echo=FALSE}
+out <- gam(cost~s(age) + gend + s(intvn) + drugs + s(ervis) + comp + s(comorb) + s(dur) , data = dat, family=gaussian(), sp=c(-1,-1,-1,-1,-1)) 
+summary(out)
+par(mfrow=c(2,4))
+plot(out)
+```
+
+As seen above, the most relevant predictors seem to be comp, intvn, and ervis.
+
+### b
+
+```{r q2b, echo=FALSE}
+sd(yhat[, 1])
+```
+
+The advantage of using n-fold CV over k-fold CV for GAM model is that we can get more estimates of the cross validation error, and it has a lower bias compared to k-fold CV due to using almost the whole dataset. The disadvantage is that it is more computationally expensive and the error estimates may have higher variance.
+
+### c
+
+```{r q2c, echo=FALSE}
+test <- data.frame(age = 59, gend = 0, intvn = 10, drugs = 0, ervis = 3, comp = 0, comorb = 4, dur = 300)
+test_std <- (test - means) / sds
+
+out <- gam(cost~s(age) + gend + s(intvn) + drugs + s(ervis) + comp + s(comorb) + s(dur) , data = dat, family=gaussian(), sp=c(-1,-1,-1,-1,-1)) 
+yhat <- as.numeric(predict(out, test_std))
+yhat #log base 10 and standardized
+```
+
+## Question 3
+
+### a
+
+```{r q3a, echo=FALSE}
 
 ```
