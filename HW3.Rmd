@@ -79,14 +79,20 @@ MSEsd[3]
 ### c
 
 ```{r q1c, echo=FALSE}
-
-
-
+test <- as.matrix(data.frame(age = 59, gend = 0, intvn = 10, drugs = 0, ervis = 3, comp = 0, comorb = 4, dur = 300))
 train <- as.matrix(dat[,2:9])
-test <- as.matrix()
-ytrain <- dat[-cv_idx[[k]], 1]
+ytrain <- dat[, 1]
 
 out<-ann(train,test,9,verbose=F)
-ind<-as.matrix(out$knnIndexDist[,1:K2])
-yhat[cv_idx[[k]],2]<-apply(ind,2,function(x) mean(ytrain$cost[x]))
+ind<-as.matrix(out$knnIndexDist[,1:9])
+yhat<-apply(ind,2,function(x) mean(ytrain$cost[x]))
+yhat
+```
+
+## Question 2
+
+### a
+
+```{r q2a, echo=FALSE}
+
 ```
