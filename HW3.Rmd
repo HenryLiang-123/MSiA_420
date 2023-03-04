@@ -1,0 +1,92 @@
+---
+title: "HW3"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(boot)
+library(caret)
+library(projpred)
+library(MASS)
+library(car)
+library(nnet)
+library(rpart)
+library(tidyverse)
+library(yaImpute)
+library(scatterplot3d)
+library(rgl)
+```
+
+## Question 1
+
+### a
+
+```{r q1a, echo=FALSE}
+dat <- read_excel("HW2_data.xls") %>%
+  select(-'...1')
+dat$cost <- log10(dat$cost)
+
+Nrep <- 50 #number of replicates of CV
+K <-  nrow(dat) #n-fold CV on each replicate
+n.models <- 4 #number of different models to fit
+n <- nrow(dat)
+y <- dat$cost
+yhat = matrix(0, n, n.models) 
+MSE <- matrix(0, Nrep, n.models)
+cv_idx <- createFolds(dat$cost, k = K)
+for (k in 1:K) {
+  train <- as.matrix(dat[-cv_idx[[k]],2:9])
+  test <- as.matrix(dat[cv_idx[[k]],2:9])
+  ytrain <- dat[-cv_idx[[k]], 1]
+  K1 <- 3
+  K2 <- 6
+  K3 <- 9
+  K4 <- 12
+  out<-ann(train,test,K1,verbose=F)
+  ind<-as.matrix(out$knnIndexDist[,1:K1])
+  yhat[cv_idx[[k]],1]<-apply(ind,2,function(x) mean(ytrain$cost[x]))
+  
+  out<-ann(train,test,K2,verbose=F)
+  ind<-as.matrix(out$knnIndexDist[,1:K2])
+  yhat[cv_idx[[k]],2]<-apply(ind,2,function(x) mean(ytrain$cost[x]))
+  
+  out<-ann(train,test,K3,verbose=F)
+  ind<-as.matrix(out$knnIndexDist[,1:K3])
+  yhat[cv_idx[[k]],3]<-apply(ind,2,function(x) mean(ytrain$cost[x]))
+  
+  out<-ann(train,test,K4,verbose=F)
+  ind<-as.matrix(out$knnIndexDist[,1:K4])
+  yhat[cv_idx[[k]],4]<-apply(ind,2,function(x) mean(ytrain$cost[x]))
+} #end of k loop
+MSE[1,]=apply(yhat,2,function(x) sum((y-x)^2))/n
+#end of j loop
+MSEAve<- apply(MSE,2,mean); MSEAve #averaged mean square CV error
+MSEsd <- apply(MSE,2,sd); MSEsd   #SD of mean square CV error
+r2<-1-MSEAve/var(y); r2  #CV r^2
+plot(yhat[,2],y)
+```
+
+The best K was 9. The pros for using n-fold cross validation over k-fold cross validation is that we can test the model over a variety of datasets and that we do not need replicates. The disadvantage is that it is computationally expensive.
+
+### b
+
+```{r q1b, echo=FALSE}
+MSEsd[3]
+```
+
+### c
+
+```{r q1c, echo=FALSE}
+
+
+
+train <- as.matrix(dat[,2:9])
+test <- as.matrix()
+ytrain <- dat[-cv_idx[[k]], 1]
+
+out<-ann(train,test,9,verbose=F)
+ind<-as.matrix(out$knnIndexDist[,1:K2])
+yhat[cv_idx[[k]],2]<-apply(ind,2,function(x) mean(ytrain$cost[x]))
+```
